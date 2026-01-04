@@ -3,6 +3,7 @@
 # =============================================================================
 TARGET_NAME = cck-roo
 
+# Use $(HOME) to pull the user's home directory from the shell environment
 BASE_ARDUINO    = $(HOME)/.arduino15
 BASE_USER_LIBS  = $(HOME)/Arduino/libraries
 
@@ -22,21 +23,20 @@ USER_LIBS        = $(BASE_USER_LIBS)
 BUILD_DIR = build
 
 # =============================================================================
-# SOURCES AND INCLUDES
+# SOURCES
 # =============================================================================
 
-# 1. Project Sources (Current Directory)
+# 1. Project Sources
 PROJECT_SRCS  = $(wildcard *.cpp) $(wildcard *.c)
 
-# 2. Core Sources (HAL, LL, SrcWrapper, USBDevice)
+# 2. Core Sources
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/cores/arduino/*.cpp)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/cores/arduino/avr/*.c)
-CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/core/*.c)
-CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/core/*.cpp)
-# Variant specific (Feather F405)
+CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/cores/arduino/stm32/*.c)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/variants/STM32F4xx/F405RGT_F415RGT/*.cpp)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/variants/STM32F4xx/F405RGT_F415RGT/*.c)
-# Drivers (SrcWrapper, HAL, LL, USB) - Recursive lookups would be better, but explicit based on logs:
+
+# 3. Drivers (SrcWrapper, HAL, LL, USB)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/libraries/SrcWrapper/src/*.cpp)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/libraries/SrcWrapper/src/*/*.c)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/libraries/SrcWrapper/src/*/*.cpp)
@@ -47,7 +47,7 @@ CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/libraries/Wire/src/utility/*.c)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/libraries/SPI/src/*.cpp)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/libraries/SPI/src/utility/*.c)
 
-# 3. User Libraries (Adafruit, SdFat, etc.)
+# 4. User Libraries
 LIB_SRCS += $(wildcard $(USER_LIBS)/Adafruit_NeoPixel/*.cpp) $(wildcard $(USER_LIBS)/Adafruit_NeoPixel/*.c)
 LIB_SRCS += $(wildcard $(USER_LIBS)/Adafruit_GFX_Library/*.cpp) $(wildcard $(USER_LIBS)/Adafruit_GFX_Library/*.c)
 LIB_SRCS += $(wildcard $(USER_LIBS)/Adafruit_BusIO/*.cpp)
@@ -62,10 +62,11 @@ LIB_SRCS += $(wildcard $(USER_LIBS)/Adafruit_SPIFlash/src/*.cpp) \
 LIB_SRCS += $(wildcard $(USER_LIBS)/Adafruit_ImageReader_Library/*.cpp)
 LIB_SRCS += $(wildcard $(USER_LIBS)/QRCodeGFX/src/*.cpp) $(wildcard $(USER_LIBS)/QRCodeGFX/src/*.c)
 
-# Combine all sources
 SRCS = $(PROJECT_SRCS) $(CORE_SRCS) $(LIB_SRCS)
 
-# Include Paths (Copied from log)
+# =============================================================================
+# INCLUDES
+# =============================================================================
 INCLUDES  = -I.
 INCLUDES += -I$(STM32_CORE_PATH)/cores/arduino/avr
 INCLUDES += -I$(STM32_CORE_PATH)/cores/arduino/stm32
@@ -104,12 +105,12 @@ INCLUDES += -I$(USER_LIBS)/QRCodeGFX/src
 # FLAGS
 # =============================================================================
 
-# MCU Flags
 MCU_FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb
 
-# Macros / Defines
+# QUOTING FIX: Ensure quotes persist through to the compiler
 DEFINES  = -DSTM32F4xx -DARDUINO=10607 -DARDUINO_FEATHER_F405 -DARDUINO_ARCH_STM32
-DEFINES += -DBOARD_NAME="FEATHER_F405" -DVARIANT_H="variant_FEATHER_F405.h" -DSTM32F405xx
+DEFINES += '-DBOARD_NAME="FEATHER_F405"' '-DVARIANT_H="variant_FEATHER_F405.h"'
+DEFINES += -DSTM32F405xx
 DEFINES += -DUSBCON -DUSBD_VID=0x0483 -DUSBD_PID=0x5740 -DHAL_PCD_MODULE_ENABLED
 DEFINES += -DUSBD_USE_CDC -DHAL_UART_MODULE_ENABLED
 DEFINES += -DVECT_TAB_OFFSET=0x0 -DUSE_HAL_DRIVER -DUSE_FULL_LL_DRIVER -DNDEBUG
@@ -139,40 +140,32 @@ OBJS = $(addprefix $(BUILD_DIR)/, $(addsuffix .o, $(basename $(SRCS))))
 
 all: $(BUILD_DIR)/$(TARGET_NAME).elf $(BUILD_DIR)/$(TARGET_NAME).hex $(BUILD_DIR)/$(TARGET_NAME).bin size
 
-# Link
 $(BUILD_DIR)/$(TARGET_NAME).elf: $(OBJS)
 	@echo "Linking $@"
 	@$(CC) $(OBJS) $(LDFLAGS) -o $@
 
-# Compile C++
 $(BUILD_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	@echo "Compiling C++: $<"
 	@$(CXX) $(CXXFLAGS) $< -o $@
 
-# Compile C
 $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	@echo "Compiling C: $<"
 	@$(CC) $(CFLAGS) $< -o $@
 
-# Convert to HEX
 $(BUILD_DIR)/$(TARGET_NAME).hex: $(BUILD_DIR)/$(TARGET_NAME).elf
 	@$(OBJCOPY) -O ihex $< $@
 
-# Convert to BIN
 $(BUILD_DIR)/$(TARGET_NAME).bin: $(BUILD_DIR)/$(TARGET_NAME).elf
 	@$(OBJCOPY) -O binary $< $@
 
-# Size Check
 size: $(BUILD_DIR)/$(TARGET_NAME).elf
 	@$(SIZE) -A $<
 
-# Clean
 clean:
 	rm -rf $(BUILD_DIR)
 
-# Upload (using STM32CubeProg as seen in logs)
 upload: $(BUILD_DIR)/$(TARGET_NAME).bin
 	@echo "Uploading..."
 	sh $(ARDUINO_PACKAGES)/tools/STM32Tools/2.4.0/stm32CubeProg.sh \
