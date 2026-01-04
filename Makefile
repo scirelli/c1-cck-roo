@@ -1,9 +1,13 @@
 # =============================================================================
 # PROJECT SETTINGS
 # =============================================================================
+export PATH := $(PATH):$(shell pwd)/stm32cube/bin
+export PATH := $(PATH):/opt/AppImages/ImageMagick
+
+CNT_MNGR ?= podman
+
 TARGET_NAME = cck-roo
 
-# Use $(HOME) to pull the user's home directory from the shell environment
 BASE_ARDUINO    = $(HOME)/.arduino15
 BASE_USER_LIBS  = $(HOME)/Arduino/libraries
 
@@ -11,6 +15,7 @@ BASE_USER_LIBS  = $(HOME)/Arduino/libraries
 TOOLCHAIN_PATH  = $(BASE_ARDUINO)/packages/STMicroelectronics/tools/xpack-arm-none-eabi-gcc/14.2.1-1.1/bin
 CC      = $(TOOLCHAIN_PATH)/arm-none-eabi-gcc
 CXX     = $(TOOLCHAIN_PATH)/arm-none-eabi-g++
+AS      = $(TOOLCHAIN_PATH)/arm-none-eabi-gcc
 OBJCOPY = $(TOOLCHAIN_PATH)/arm-none-eabi-objcopy
 SIZE    = $(TOOLCHAIN_PATH)/arm-none-eabi-size
 
@@ -29,18 +34,23 @@ BUILD_DIR = build
 # 1. Project Sources
 PROJECT_SRCS  = $(wildcard *.cpp) $(wildcard *.c)
 
-# 2. Core Sources
+# 2. Core Sources (Wiring, Variants, etc.)
+# FIX: Added cores/arduino/*.c to pick up wiring.c (millis), wiring_digital.c (pinMode)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/cores/arduino/*.cpp)
+CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/cores/arduino/*.c)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/cores/arduino/avr/*.c)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/cores/arduino/stm32/*.c)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/variants/STM32F4xx/F405RGT_F415RGT/*.cpp)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/variants/STM32F4xx/F405RGT_F415RGT/*.c)
 
 # 3. Drivers (SrcWrapper, HAL, LL, USB)
+# Note: SrcWrapper contains the system calls (_sbrk) and HAL wrappers
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/libraries/SrcWrapper/src/*.cpp)
+CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/libraries/SrcWrapper/src/*.c)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/libraries/SrcWrapper/src/*/*.c)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/libraries/SrcWrapper/src/*/*.cpp)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/libraries/USBDevice/src/*.cpp)
+CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/libraries/USBDevice/src/*.c)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/libraries/USBDevice/src/*/*.c)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/libraries/Wire/src/*.cpp)
 CORE_SRCS += $(wildcard $(STM32_CORE_PATH)/libraries/Wire/src/utility/*.c)
@@ -63,6 +73,10 @@ LIB_SRCS += $(wildcard $(USER_LIBS)/Adafruit_ImageReader_Library/*.cpp)
 LIB_SRCS += $(wildcard $(USER_LIBS)/QRCodeGFX/src/*.cpp) $(wildcard $(USER_LIBS)/QRCodeGFX/src/*.c)
 
 SRCS = $(PROJECT_SRCS) $(CORE_SRCS) $(LIB_SRCS)
+
+# 5. Assembly Startup File (Essential for Reset_Handler)
+# FIX: Explicitly added the startup file for STM32F405
+ASM_SRCS = $(STM32_CORE_PATH)/system/Drivers/CMSIS/Device/ST/STM32F4xx/Source/Templates/gcc/startup_stm32f405xx.s
 
 # =============================================================================
 # INCLUDES
@@ -121,6 +135,7 @@ COMMON_FLAGS = $(MCU_FLAGS) -c -Os -w $(DEFINES) $(INCLUDES) \
 
 CFLAGS   = $(COMMON_FLAGS) -std=gnu11
 CXXFLAGS = $(COMMON_FLAGS) -std=gnu++17 -fno-threadsafe-statics -fno-rtti -fno-exceptions -fno-use-cxa-atexit
+ASFLAGS  = $(MCU_FLAGS) -x assembler-with-cpp $(DEFINES) $(INCLUDES)
 
 # Linker Flags
 LDSCRIPT = $(STM32_CORE_PATH)/variants/STM32F4xx/F405RGT_F415RGT/ldscript.ld
@@ -137,12 +152,13 @@ LDFLAGS  = $(MCU_FLAGS) -Os -w --specs=nano.specs -Wl,--defsym=LD_FLASH_OFFSET=0
 # =============================================================================
 
 OBJS = $(addprefix $(BUILD_DIR)/, $(addsuffix .o, $(basename $(SRCS))))
+ASM_OBJS = $(addprefix $(BUILD_DIR)/, $(addsuffix .o, $(basename $(ASM_SRCS))))
 
 all: $(BUILD_DIR)/$(TARGET_NAME).elf $(BUILD_DIR)/$(TARGET_NAME).hex $(BUILD_DIR)/$(TARGET_NAME).bin size
 
-$(BUILD_DIR)/$(TARGET_NAME).elf: $(OBJS)
+$(BUILD_DIR)/$(TARGET_NAME).elf: $(OBJS) $(ASM_OBJS)
 	@echo "Linking $@"
-	@$(CC) $(OBJS) $(LDFLAGS) -o $@
+	@$(CC) $(OBJS) $(ASM_OBJS) $(LDFLAGS) -o $@
 
 $(BUILD_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
@@ -153,6 +169,11 @@ $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	@echo "Compiling C: $<"
 	@$(CC) $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/%.o: %.s
+	@mkdir -p $(dir $@)
+	@echo "Compiling ASM: $<"
+	@$(AS) $(ASFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/$(TARGET_NAME).hex: $(BUILD_DIR)/$(TARGET_NAME).elf
 	@$(OBJCOPY) -O ihex $< $@
@@ -168,7 +189,6 @@ clean:
 
 upload: $(BUILD_DIR)/$(TARGET_NAME).bin
 	@echo "Uploading..."
-	sh $(ARDUINO_PACKAGES)/tools/STM32Tools/2.4.0/stm32CubeProg.sh \
-	-i dfu -f "$<" -o 0x0 -v 0x0483 -p 0xdf11 -a 0x8000000 -s 0x8000000
+	sh $(ARDUINO_PACKAGES)/tools/STM32Tools/2.4.0/stm32CubeProg.sh -i dfu -f "$<" -o 0x0 -v 0x0483 -p 0xdf11 -a 0x8000000 -s 0x8000000
 
 .PHONY: all clean size upload
