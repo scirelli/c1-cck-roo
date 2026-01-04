@@ -11,6 +11,9 @@ TARGET_NAME = cck-roo
 BASE_ARDUINO    = $(HOME)/.arduino15
 BASE_USER_LIBS  = $(HOME)/Arduino/libraries
 
+SERIAL_PORT ?= /dev/ttyACM0
+BAUD_RATE ?= 9600
+
 # Toolchain Path
 TOOLCHAIN_PATH  = $(BASE_ARDUINO)/packages/STMicroelectronics/tools/xpack-arm-none-eabi-gcc/14.2.1-1.1/bin
 CC      = $(TOOLCHAIN_PATH)/arm-none-eabi-gcc
@@ -190,5 +193,10 @@ clean:
 upload: $(BUILD_DIR)/$(TARGET_NAME).bin
 	@echo "Uploading..."
 	sh $(ARDUINO_PACKAGES)/tools/STM32Tools/2.4.0/stm32CubeProg.sh -i dfu -f "$<" -o 0x0 -v 0x0483 -p 0xdf11 -a 0x8000000 -s 0x8000000
+
+monitor:
+	@echo "Opening serial monitor on $(SERIAL_PORT) at $(BAUD_RATE) baud..."
+	@stty -F $(SERIAL_PORT) $(BAUD_RATE) raw -clocal -echo
+	@cat $(SERIAL_PORT)
 
 .PHONY: all clean size upload
