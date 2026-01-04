@@ -1,14 +1,16 @@
 #include <Adafruit_NeoPixel.h>
+#include "rooDisplay.h"
 
 #define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 
 #define ANALOG_MAX         1023.0f
 #define ANALOG_V           3.3f
-#define MIN_REFRESH_DELAY (3 * 60 * 1000)
 #define NUMPIXELS         12
 
 //==== Pin out ====
-#define VBAT_PIN            (A6)
+//#define BOOT_EN_PIN       (B0)  // Used to enable flashing
+//#define BAT_PIN           (BAT) // Tied to positive battery  terminal
+//#define USB_PIN           (USB) // Tied to 5v of the USB C
 
 #define SD_CS_PIN       13    // SDcard Chip Select (E-Ink)
 #define EPD_DC_PIN      6     // Data/Command Pin E-Ink
@@ -19,24 +21,49 @@
 #define EPD_SPI_PIN     &SPI  // primary SPI
 
 #define BUILT_IN_PIXEL_PIN  8
-#define NEO_STRIP_PIN       10
 #define IR_PIN_1            (A0)
 #define IR_PIN_2            (A1)
 #define IR_PIN_3            (A2)
 #define PHOTO_TRAN_PIN      (A3)
+#define BTN_PIN             (A4)
+#define NEO_STRIP_PIN       (A5)
+#define VBAT_PIN            (A6)  // Pin for reading battery voltage
 //=================
 
-static Adafruit_NeoPixel strip(NUMPIXELS, BUILT_IN_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
+static Adafruit_NeoPixel builtInNeo(1, BUILT_IN_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
+static Adafruit_NeoPixel strip(NUMPIXELS, NEO_STRIP_PIN, NEO_GRBW + NEO_KHZ800);
 static uint16_t counter = 0;
 static uint8_t pixelColor[3];
+
+void setupGPIO();
+void setupNeoPixels();
+
+void setupGPIO() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(BTN_PIN, INPUT_PULLDOWN);
+}
+
+void setupNeoPixels() {
+  pinMode(NEO_STRIP_PIN, OUTPUT);
+  builtInNeo.begin();
+  builtInNeo.show();  // Initialize all pixels to 'off'
+
+  strip.begin();
+  strip.show();
+  strip.setPixelColor(1, strip.Color(5,0,0,0));
+  strip.setPixelColor(2, strip.Color(0,5,0,0));
+  strip.setPixelColor(3, strip.Color(0,0,5,0));
+  strip.setPixelColor(4, strip.Color(0,0,0,5));
+  strip.show();
+}
 
 void setup() {
   Serial.begin(115200);
   while (!Serial) delay(10);
 
-  pinMode(LED_BUILTIN, OUTPUT);
-  strip.show();  // Initialize all pixels to 'off'
-  strip.begin();
+  setupGPIO();
+  setupNeoPixels();
+  setupDisplay();
 }
 
 void loop() {
@@ -58,7 +85,13 @@ void loop() {
   sensorValue = analogRead(PHOTO_TRAN_PIN);
   Serial.println(sensorValue);
 
-  //strip.setPixelColor(0, strip.gamma32(strip.ColorHSV(counter++, 255, 55))); //strip.Color(r,g,b);
-  strip.setPixelColor(0, strip.gamma32(strip.Color(pixelColor[0], pixelColor[1], pixelColor[2])));
+  //builtInNeo.setPixelColor(0, builtInNeo.gamma32(builtInNeo.ColorHSV(counter++, 255, 55))); //builtInNeo.Color(r,g,b);
+  builtInNeo.setPixelColor(0, builtInNeo.gamma32(builtInNeo.Color(pixelColor[0], pixelColor[1], pixelColor[2])));
+  builtInNeo.show();
+
+  strip.setPixelColor(0, strip.gamma32(strip.ColorHSV(counter++, 255, 55)));
   strip.show();
+
+  int buttonState = digitalRead(BTN_PIN);
+  Serial.print("Btn: "); Serial.println(buttonState);
 }
