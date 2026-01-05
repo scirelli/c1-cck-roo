@@ -1,6 +1,8 @@
 # =============================================================================
 # PROJECT SETTINGS
 # =============================================================================
+OS := $(shell uname -s)
+
 export PATH := $(PATH):$(shell pwd)/stm32cube/bin
 export PATH := $(PATH):/opt/AppImages/ImageMagick
 
@@ -8,8 +10,13 @@ CNT_MNGR ?= podman
 
 TARGET_NAME = cck-roo
 
+ifeq ($(OS),Darwin)
+BASE_ARDUINO    = $(HOME)/Library/Arduino15
+BASE_USER_LIBS  = $(HOME)/Projects/ArduinoLibs/libraries/
+else
 BASE_ARDUINO    = $(HOME)/.arduino15
 BASE_USER_LIBS  = $(HOME)/Arduino/libraries
+endif
 
 SERIAL_PORT ?= /dev/ttyACM0
 BAUD_RATE ?= 9600
@@ -230,7 +237,6 @@ term:
 # Build STM32 Cube Programmer
 # =============================================================================
 CNT_MNGR ?= podman
-OS := $(shell uname -s)
 
 install-CubePrgr: copy-stm32cube
 
