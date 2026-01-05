@@ -1,5 +1,7 @@
 #include <Adafruit_NeoPixel.h>
+#include <stdbool.h>
 #include "rooDisplay.h"
+#include "mqtt.h"
 
 #define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 
@@ -32,18 +34,54 @@
 
 static Adafruit_NeoPixel builtInNeo(1, BUILT_IN_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 static Adafruit_NeoPixel strip(NUMPIXELS, NEO_STRIP_PIN, NEO_GRBW + NEO_KHZ800);
-static uint16_t counter = 0;
-static uint8_t pixelColor[3];
+static int prvButtonState = false;
+static int analogValues[5];
 
-void setupGPIO();
-void setupNeoPixels();
+void gpio_setup();
+void neopixels_setup();
 
-void setupGPIO() {
+static void readAnalogSensores()
+{
+  analogValues[0] = analogRead(IR_PIN_1);
+  analogValues[1] = analogRead(IR_PIN_2);
+  analogValues[2] = analogRead(IR_PIN_3);
+  analogValues[3] = analogRead(PHOTO_TRAN_PIN);
+}
+
+static void updateBuiltinNeoPixel()
+{
+  static uint8_t pixelColor[3];
+  int sensorValue = analogValues[0];
+  pixelColor[0] = (uint8_t)(255 * (sensorValue/ANALOG_MAX));
+  float voltage = sensorValue * (ANALOG_V / ANALOG_MAX);  // Convert the analog reading (which goes from 0 - 1023) to a voltage (0 - 3.3V):
+  //Serial.print("R1 (V): ");Serial.print(voltage);Serial.print("\t");Serial.println(sensorValue);
+
+  sensorValue = analogValues[1];
+  voltage = sensorValue * (ANALOG_V / ANALOG_MAX);
+  pixelColor[1] = (uint8_t)(255 * (sensorValue/ANALOG_MAX));
+  //Serial.print("R2 (V): ");Serial.print(voltage);Serial.print("\t");Serial.println(sensorValue);
+
+  sensorValue = analogValues[2];
+  voltage = sensorValue * (ANALOG_V / ANALOG_MAX);
+  pixelColor[2] = (uint8_t)(255 * (sensorValue/ANALOG_MAX));
+  //Serial.print("R3 (V): ");Serial.print(voltage);Serial.print("\t");Serial.println(sensorValue);
+  //builtInNeo.setPixelColor(0, builtInNeo.gamma32(builtInNeo.ColorHSV(counter++, 255, 55))); //builtInNeo.Color(r,g,b);
+  builtInNeo.setPixelColor(0, builtInNeo.gamma32(builtInNeo.Color(pixelColor[0], pixelColor[1], pixelColor[2])));
+  builtInNeo.show();
+}
+
+static void updateStrip() {
+  static uint16_t counter = 0;
+  strip.setPixelColor(0, strip.gamma32(strip.ColorHSV(counter++, 255, 55)));
+  strip.show();
+}
+
+void gpio_setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(BTN_PIN, INPUT_PULLDOWN);
 }
 
-void setupNeoPixels() {
+void neopixels_setup() {
   pinMode(NEO_STRIP_PIN, OUTPUT);
   builtInNeo.begin();
   builtInNeo.show();  // Initialize all pixels to 'off'
@@ -61,37 +99,24 @@ void setup() {
   Serial.begin(115200);
   while (!Serial) delay(10);
 
-  setupGPIO();
-  setupNeoPixels();
-  setupDisplay();
+  mqtt_setup();
+  gpio_setup();
+  //neopixels_setup();
+  //display_setup();
 }
 
 void loop() {
-  int sensorValue = analogRead(IR_PIN_1);
-  pixelColor[0] = (uint8_t)(255 * (sensorValue/ANALOG_MAX));
-  float voltage = sensorValue * (ANALOG_V / ANALOG_MAX);  // Convert the analog reading (which goes from 0 - 1023) to a voltage (0 - 3.3V):
-  //Serial.print("R1 (V): ");Serial.print(voltage);Serial.print("\t");Serial.println(sensorValue);
-
-  sensorValue = analogRead(IR_PIN_2);
-  voltage = sensorValue * (ANALOG_V / ANALOG_MAX);
-  pixelColor[1] = (uint8_t)(255 * (sensorValue/ANALOG_MAX));
-  //Serial.print("R2 (V): ");Serial.print(voltage);Serial.print("\t");Serial.println(sensorValue);
-
-  sensorValue = analogRead(IR_PIN_3);
-  voltage = sensorValue * (ANALOG_V / ANALOG_MAX);
-  pixelColor[2] = (uint8_t)(255 * (sensorValue/ANALOG_MAX));
-  //Serial.print("R3 (V): ");Serial.print(voltage);Serial.print("\t");Serial.println(sensorValue);
-
-  sensorValue = analogRead(PHOTO_TRAN_PIN);
-  Serial.println(sensorValue);
-
-  //builtInNeo.setPixelColor(0, builtInNeo.gamma32(builtInNeo.ColorHSV(counter++, 255, 55))); //builtInNeo.Color(r,g,b);
-  builtInNeo.setPixelColor(0, builtInNeo.gamma32(builtInNeo.Color(pixelColor[0], pixelColor[1], pixelColor[2])));
-  builtInNeo.show();
-
-  strip.setPixelColor(0, strip.gamma32(strip.ColorHSV(counter++, 255, 55)));
-  strip.show();
+  readAnalogSensores();
+  //updateBuiltinNeoPixel();
+  //Serial.println(analogValues[3]);
+  //updateStrip();
 
   int buttonState = digitalRead(BTN_PIN);
-  Serial.print("Btn: "); Serial.println(buttonState);
+  if(prvButtonState != buttonState) {
+    Serial.print("Btn: "); Serial.println(buttonState);
+    prvButtonState = buttonState;
+  }
+
+  display_loop();
+  mqtt_loop();
 }

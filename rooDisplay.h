@@ -20,6 +20,8 @@
 #define EPD_SPI_PIN     &SPI  // primary SPI
 //==================
 
-void setupDisplay();
+void display_setup();
+void display_loop();
+bool display_draw_imme(const char *text);
 
 #endif /* _ROO_DISPLAY_ */

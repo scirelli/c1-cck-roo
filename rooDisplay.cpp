@@ -4,7 +4,8 @@
 static ThinkInk_154_Tricolor_Z90 display(EPD_DC_PIN, EPD_RESET_PIN, EPD_CS_PIN, SRAM_CS_PIN, EPD_BUSY_PIN, EPD_SPI_PIN);
 static QRCodeGFX qrcode(display);
 
-void setupDisplay() {
+void display_setup()
+{
   Serial.println(F("Init display..."));
   display.begin(THINKINK_TRICOLOR);
   display.fillScreen(EPD_BLACK);
@@ -30,4 +31,18 @@ void setupDisplay() {
     Serial.println(F("Failed to generate QR code!"));
   }
   display.display();
+}
+
+bool display_draw_imme(const char *text)
+{
+  if(!qrcode.draw(text, 15, 15)) {
+    Serial.println(F("Failed to generate QR code!"));
+    return false;
+  }
+  display.display();
+  return true;
+}
+
+void display_loop()
+{
 }
