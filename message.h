@@ -13,9 +13,6 @@ typedef struct {
     uint8_t gpio;                //1
 } outgoingMsg_t;                 //=12 bytes
 
-const uint8_t START_CODON[] = { 0xCA, 0xFE, 0xBA, 0xBE };
-const uint8_t END_CODON[] = { 0xDE, 0xAD, 0xBE, 0xEF };
-
 uint16_t calcCRC();
 
 
