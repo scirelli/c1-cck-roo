@@ -14,14 +14,6 @@
 //#define BAT_PIN           (BAT) // Tied to positive battery  terminal
 //#define USB_PIN           (USB) // Tied to 5v of the USB C
 
-#define SD_CS_PIN       13    // SDcard Chip Select (E-Ink)
-#define EPD_DC_PIN      6     // Data/Command Pin E-Ink
-#define EPD_CS_PIN      5     // E-Ink Chip Select
-#define EPD_BUSY_PIN    12    // E-Ink Busy pin, can set to -1 to not use a pin (will wait a fixed delay)
-#define SRAM_CS_PIN     9     // SRAM Chip Select (E-Ink)
-#define EPD_RESET_PIN   11    // E-Ink Reset pin, can set to -1 and share with microcontroller Reset!
-#define EPD_SPI_PIN     &SPI  // primary SPI
-
 #define BUILT_IN_PIXEL_PIN  8
 #define IR_PIN_1            (A0)
 #define IR_PIN_2            (A1)
@@ -78,6 +70,17 @@ static void updateStrip() {
 
 void gpio_setup() {
   pinMode(LED_BUILTIN, OUTPUT);
+
+  //Make sure all CS pins are high to start, let the drivers pull them down when they want to communicate.
+  pinMode(ETH_CS_PIN, OUTPUT);
+  digitalWrite(ETH_CS_PIN, HIGH);
+  pinMode(EPD_CS_PIN, OUTPUT);
+  digitalWrite(EPD_CS_PIN, HIGH);
+  pinMode(SD_CS_PIN, OUTPUT);
+  digitalWrite(SD_CS_PIN, HIGH);
+  pinMode(SRAM_CS_PIN, OUTPUT);
+  digitalWrite(SRAM_CS_PIN, HIGH);
+
   pinMode(BTN_PIN, INPUT_PULLDOWN);
 }
 
@@ -99,17 +102,17 @@ void setup() {
   Serial.begin(115200);
   while (!Serial) delay(10);
 
-  mqtt_setup();
   gpio_setup();
-  //neopixels_setup();
-  //display_setup();
+  display_setup();
+  mqtt_setup();
+  neopixels_setup();
 }
 
 void loop() {
   readAnalogSensores();
-  //updateBuiltinNeoPixel();
+  updateBuiltinNeoPixel();
   //Serial.println(analogValues[3]);
-  //updateStrip();
+  updateStrip();
 
   int buttonState = digitalRead(BTN_PIN);
   if(prvButtonState != buttonState) {

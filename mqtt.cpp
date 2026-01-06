@@ -52,38 +52,81 @@ static void reconnect()
   }
 }
 
-void mqtt_setup()
+static void print_WIZnet_chip_id(EthernetHardwareStatus id)
 {
-  Ethernet.init(10);  // Most Arduino shields
+    switch(id) {
+        case EthernetNoHardware:
+            Serial.println("No hardware found");
+            break;
+        case EthernetW5100:
+            Serial.println("EthernetW5100");
+            break;
+        case EthernetW5200:
+            Serial.println("EthernetW5200");
+            break;
+        case EthernetW5500:
+            Serial.println("EthernetW5500");
+            break;
+        default:
+            Serial.println("Unknown");
+    }
+}
 
-  client.setServer(server, 1883);
-  client.setCallback(callback);
-
-  Serial.println("Initialize Ethernet with DHCP:");
-  if (Ethernet.begin(mac) == 0) {
-    Serial.println("Failed to configure Ethernet using DHCP");
+static void connect()
+{
+  Serial.println(F("Initialize Ethernet with DHCP:"));
+  if (Ethernet.begin(mac) == DHCP_CON_FAIL) {
+    Serial.println(F("Failed to configure Ethernet using DHCP"));
      // Check for Ethernet hardware present
     if (Ethernet.hardwareStatus() == EthernetNoHardware) {
-      Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
+      Serial.println(F("Ethernet shield was not found.  Sorry, can't run without hardware. :("));
       failedInit = true;
       return;
     }
     if (Ethernet.linkStatus() == LinkOFF) {
-      Serial.println("Ethernet cable is not connected.");
+      Serial.println(F("Ethernet cable is not connected."));
     }
     // try to configure using IP address instead of DHCP:
     Ethernet.begin(mac, ip, myDns);
   } else {
-    Serial.print("  DHCP assigned IP ");
+    Serial.print(F("  DHCP assigned IP "));
     Serial.println(Ethernet.localIP());
+    print_WIZnet_chip_id(Ethernet.hardwareStatus());
   }
-  // Allow the hardware to sort itself out
-  delay(MQTT_SETUP_DELAY);
+}
+
+static int connectWithStaticIP()
+{
+    Serial.println(F("Initialize Ethernet with static ip:"));
+    Ethernet.begin(mac, ip, myDns);
+    if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+      Serial.println(F("Ethernet shield was not found.  Sorry, can't run without hardware. :("));
+      failedInit = true;
+    }else {
+        Serial.print("  Static IP ");
+        Serial.println(Ethernet.localIP());
+        failedInit = false;
+    }
+}
+
+void mqtt_setup()
+{
+    Ethernet.init(ETH_CS_PIN);
+    connect();
+
+    client.setServer(server, 1883);
+    client.setCallback(callback);
+    // Allow the hardware to sort itself out
+    delay(MQTT_SETUP_DELAY);
 }
 
 void mqtt_loop()
 {
-  if(failedInit) return;
+  if(failedInit) {
+      //connectWithStaticIP();
+      return;
+  }
+
   if (!client.connected()) {
     reconnect();
   }
@@ -94,7 +137,7 @@ void mqtt_loop()
     lastMsg = now;
     ++value;
     snprintf (msg, 50, "hello world #%ld", value);
-    Serial.print("Publish message: ");
+    Serial.print(F("Publish message: "));
     Serial.println(msg);
     client.publish("outTopic", msg);
   }
