@@ -88,6 +88,7 @@ LIB_SRCS += $(wildcard $(USER_LIBS)/STM32duino_LwIP/src/*.cpp) \
 # 			$(wildcard $(USER_LIBS)/STM32duino_STM32Ethernet/src/utility/*.c)
 LIB_SRCS += $(wildcard $(USER_LIBS)/Ethernet/src/*.cpp) \
 			$(wildcard $(USER_LIBS)/Ethernet/src/utility/*.cpp)
+LIB_SRCS += $(wildcard $(USER_LIBS)/CRC/src/*.cpp)
 SRCS = $(PROJECT_SRCS) $(CORE_SRCS) $(LIB_SRCS)
 
 # Assembly Startup File (Essential for Reset_Handler)
@@ -131,6 +132,7 @@ INCLUDES += -I$(USER_LIBS)/Adafruit_ImageReader_Library
 INCLUDES += -I$(USER_LIBS)/QRCodeGFX/src
 INCLUDES += -I$(USER_LIBS)/Ethernet/src
 INCLUDES += -I$(USER_LIBS)/PubSubClient/src
+INCLUDES += -I$(USER_LIBS)/CRC/src
 # INCLUDES += -I$(USER_LIBS)/STM32duino_LwIP/src
 # INCLUDES += -I$(USER_LIBS)/STM32duino_STM32Ethernet/src
 

@@ -6,14 +6,27 @@
 #include <SPI.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
+#include "message.h"
 
 #define MQTT_SETUP_DELAY    1500
-#define ETH_CS_PIN          10
 
 #define DHCP_CON_FAIL    0
 #define DHCP_CON_SUCCESS 1
 
-void mqtt_setup();
+typedef void (*callback_t)(char*, uint8_t*, unsigned int);
+
+typedef struct {
+    const char *id;
+    const char *sub_topic;
+    const char *pub_topic;
+    const char *domain;
+    uint16_t port;
+    callback_t callback;
+    Client *ethClient;
+} mqtt_conf_t;
+
+bool mqtt_setup(mqtt_conf_t);
 void mqtt_loop();
+bool send(const outgoingMsg_t *payload);
 
 #endif /* _MQTT_H_ */
