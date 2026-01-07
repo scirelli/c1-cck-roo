@@ -71,8 +71,6 @@ static void updateBuiltinNeoPixel(unsigned long timeMs);
 static void updateStrip(unsigned long timeMs);
 static void print_WIZnet_chip_id(EthernetHardwareStatus id);
 
-
-
 static void print_WIZnet_chip_id(EthernetHardwareStatus id)
 {
     switch(id) {
