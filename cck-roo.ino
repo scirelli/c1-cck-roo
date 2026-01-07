@@ -3,11 +3,19 @@
 #include <Ethernet.h>
 #include "rooDisplay.h"
 #include "mqtt.h"
+#include "message.h"
 
 #define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 #define SERIAL_BAUD_RATE 115200
 
-#define ANALOG_MAX        1023.0f
+#define ANALOG_RES  8
+#if ANALOG_RES == 8
+#define ANALOG_MAX        255.0f // 8bit res
+#elif ANALOG_RES == 12
+#define ANALOG_MAX        4095.0f //10bit res
+#else
+#define ANALOG_MAX        1023.0f //10bit res
+#endif
 #define ANALOG_V          3.3f
 #define NUMPIXELS         12
 
@@ -18,14 +26,24 @@
 
 #define ETH_CS_PIN          10
 
-#define BUILT_IN_PIXEL_PIN  8
-#define IR_PIN_1            (A0)
-#define IR_PIN_2            (A1)
-#define IR_PIN_3            (A2)
-#define PHOTO_TRAN_PIN      (A3)
-#define BTN_PIN             (A4)
-#define NEO_STRIP_PIN       (A5)
-#define VBAT_PIN            (A6)  // Pin for reading battery voltage
+#define IR_1_PIN                          (A0)
+#define IR_2_PIN                          (A1)
+#define IR_3_PIN                          (A2)
+#define IR_4_PIN                          0
+#define IR_5_PIN                          0
+#define IR_6_PIN                          0
+#define AMBIENT_LIGHT_SENSE_PIN           (A3)
+#define MOTOR_OVERCURRENT_SENSE_PIN       0
+#define SYSTEM_12V_OVERCURRENT_SENSE_PIN  0
+#define IR_PIN_LIST  {(IR_1_PIN), (IR_2_PIN), (IR_3_PIN)}
+#define ALL_ADC_PINS {(IR_1_PIN), (IR_2_PIN), (IR_3_PIN), (IR_4_PIN), (IR_5_PIN), (IR_6_PIN), (AMBIENT_LIGHT_SENSE_PIN),(MOTOR_OVERCURRENT_SENSE_PIN),(SYSTEM_12V_OVERCURRENT_SENSE_PIN)}
+#define ADC_COUNT 4
+
+#define BUILT_IN_PIXEL_PIN      8
+#define BTN_PIN                 (A4)
+#define NEO_STRIP_PIN           (A5)
+#define VBAT_PIN                (A6)  // Pin for reading battery voltage
+
 //=================
 
 static Adafruit_NeoPixel builtInNeo(1, BUILT_IN_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
@@ -36,7 +54,9 @@ static IPAddress ip(172, 16, 0, 15);
 static IPAddress myDns(9, 9, 9, 9);
 static EthernetClient ethClient;
 static int prvButtonState = false;
-static int analogValues[5];
+static outgoingMsg_t outgoingMsg;
+
+
 
 static void gpio_setup();
 static void neopixels_setup();
@@ -44,6 +64,7 @@ static bool ethernet_setup();
 static bool ethernet_setup_dhcp();
 static bool ethernet_setup_static_ip();
 static void mqtt_callback(char* topic, byte* payload, unsigned int length);
+
 
 
 static void print_WIZnet_chip_id(EthernetHardwareStatus id)
@@ -64,6 +85,11 @@ static void print_WIZnet_chip_id(EthernetHardwareStatus id)
         default:
             Serial.println("Unknown");
     }
+}
+
+static void adc_setup()
+{
+  analogReadResolution(8);
 }
 
 static void gpio_setup()
@@ -148,26 +174,30 @@ static bool ethernet_setup()
 
 static void readAnalogSensores()
 {
-  analogValues[0] = analogRead(IR_PIN_1);
-  analogValues[1] = analogRead(IR_PIN_2);
-  analogValues[2] = analogRead(IR_PIN_3);
-  analogValues[3] = analogRead(PHOTO_TRAN_PIN);
+  outgoingMsg.adc_data[0] = analogRead(IR_1_PIN);
+  outgoingMsg.adc_data[1] = analogRead(IR_2_PIN);
+  outgoingMsg.adc_data[2] = analogRead(IR_3_PIN);
+  outgoingMsg.adc_data[6] = analogRead(AMBIENT_LIGHT_SENSE_PIN);
+  //Serial.print(outgoingMsg.adc_data[0]); Serial.print(", ");
+  //Serial.print(outgoingMsg.adc_data[1]); Serial.print(", ");
+  //Serial.print(outgoingMsg.adc_data[2]); Serial.print(", ");
+  //Serial.println(outgoingMsg.adc_data[6]);
 }
 
 static void updateBuiltinNeoPixel()
 {
   static uint8_t pixelColor[3];
-  int sensorValue = analogValues[0];
+  int sensorValue = outgoingMsg.adc_data[0];
   pixelColor[0] = (uint8_t)(255 * (sensorValue/ANALOG_MAX));
   float voltage = sensorValue * (ANALOG_V / ANALOG_MAX);  // Convert the analog reading (which goes from 0 - 1023) to a voltage (0 - 3.3V):
   //Serial.print("R1 (V): ");Serial.print(voltage);Serial.print("\t");Serial.println(sensorValue);
 
-  sensorValue = analogValues[1];
+  sensorValue = outgoingMsg.adc_data[1];
   voltage = sensorValue * (ANALOG_V / ANALOG_MAX);
   pixelColor[1] = (uint8_t)(255 * (sensorValue/ANALOG_MAX));
   //Serial.print("R2 (V): ");Serial.print(voltage);Serial.print("\t");Serial.println(sensorValue);
 
-  sensorValue = analogValues[2];
+  sensorValue = outgoingMsg.adc_data[2];
   voltage = sensorValue * (ANALOG_V / ANALOG_MAX);
   pixelColor[2] = (uint8_t)(255 * (sensorValue/ANALOG_MAX));
   //Serial.print("R3 (V): ");Serial.print(voltage);Serial.print("\t");Serial.println(sensorValue);
@@ -201,6 +231,7 @@ void setup() {
   Serial.begin(SERIAL_BAUD_RATE);
   while (!Serial) delay(10);
 
+  adc_setup();
   gpio_setup();
   display_setup();
   ethernet_setup();
@@ -220,7 +251,6 @@ void setup() {
 void loop() {
   readAnalogSensores();
   updateBuiltinNeoPixel();
-  //Serial.println(analogValues[3]);
   updateStrip();
 
   int buttonState = digitalRead(BTN_PIN);
