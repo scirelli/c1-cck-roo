@@ -71,6 +71,53 @@ static void updateBuiltinNeoPixel(unsigned long timeMs);
 static void updateStrip(unsigned long timeMs);
 static void print_WIZnet_chip_id(EthernetHardwareStatus id);
 
+// Override the default system clock configuration
+// This forces: 12MHz Crystal -> 168MHz CPU | 48MHz USB
+extern "C" void SystemClock_Config(void) {
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  // 1. Configure the main internal regulator output voltage
+  __HAL_RCC_PWR_CLK_ENABLE();
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+
+  // 2. Initialize the PLL with HSE (External 12MHz Crystal)
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+
+  // PLL Math: 12MHz / M(12) * N(336) / P(2) = 168MHz
+  RCC_OscInitStruct.PLL.PLLM = 12;
+  RCC_OscInitStruct.PLL.PLLN = 336;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+  RCC_OscInitStruct.PLL.PLLQ = 7; // 12/12*336/7 = 48MHz for USB
+
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+    // Initialization Error - Stuck here if crystal is bad/missing
+    while (1);
+  }
+
+  // 3. Initialize the CPU, AHB and APB buses clocks
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK) {
+    while (1);
+  }
+
+  // 4. Update the global clock variable so millis() calculates correctly
+  SystemCoreClockUpdate();
+
+  // 5. Re-init SysTick for the new clock speed
+  HAL_SYSTICK_Config(HAL_RCC_GetHCLKFreq()/1000);
+  HAL_SYSTICK_CLKSourceConfig(SYSTICK_CLKSOURCE_HCLK);
+}
+
 static void print_WIZnet_chip_id(EthernetHardwareStatus id)
 {
     switch(id) {
@@ -295,6 +342,11 @@ static void drawOnDisplay() {
 }
 
 void setup() {
+  SystemClock_Config();
+  SystemCoreClock = 168000000;
+  HAL_SYSTICK_Config(SystemCoreClock / 1000);
+  HAL_SYSTICK_CLKSourceConfig(SYSTICK_CLKSOURCE_HCLK);
+
   Serial.begin(SERIAL_BAUD_RATE);
   while (!Serial) delay(10);
 
