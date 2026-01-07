@@ -21,7 +21,7 @@
 //==================
 
 void display_setup();
-void display_loop();
+void display_loop(long timeMs);
 bool display_draw_imme(const char *text);
 
 #endif /* _ROO_DISPLAY_ */

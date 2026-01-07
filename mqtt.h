@@ -26,7 +26,7 @@ typedef struct {
 } mqtt_conf_t;
 
 bool mqtt_setup(mqtt_conf_t);
-void mqtt_loop();
+void mqtt_loop(long timeMs);
 bool send(const outgoingMsg_t *payload);
 
 #endif /* _MQTT_H_ */

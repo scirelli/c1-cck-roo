@@ -53,7 +53,6 @@ static byte mac[] = { 0x98, 0x76, 0xB6, 0x13, 0x37, 0x0F };
 static IPAddress ip(172, 16, 0, 15);
 static IPAddress myDns(9, 9, 9, 9);
 static EthernetClient ethClient;
-static int prvButtonState = false;
 static outgoingMsg_t outgoingMsg;
 
 
@@ -63,7 +62,14 @@ static void neopixels_setup();
 static bool ethernet_setup();
 static bool ethernet_setup_dhcp();
 static bool ethernet_setup_static_ip();
+static void adc_setup();
+
 static void mqtt_callback(char* topic, byte* payload, unsigned int length);
+static void ethernet_loop(unsigned long timeMs);
+static void readAnalogSensores(unsigned long timeMs);
+static void updateBuiltinNeoPixel(unsigned long timeMs);
+static void updateStrip(unsigned long timeMs);
+static void print_WIZnet_chip_id(EthernetHardwareStatus id);
 
 
 
@@ -171,8 +177,16 @@ static bool ethernet_setup()
 
 
 
+static void ethernet_loop(unsigned long timeMs)
+{
+  static long prevTime = 0;
 
-static void readAnalogSensores()
+  if((timeMs - prevTime) >= 1000) {
+    Ethernet.maintain();
+  }
+}
+
+static void readAnalogSensores(unsigned long timeMs)
 {
   outgoingMsg.adc_data[0] = analogRead(IR_1_PIN);
   outgoingMsg.adc_data[1] = analogRead(IR_2_PIN);
@@ -184,7 +198,7 @@ static void readAnalogSensores()
   //Serial.println(outgoingMsg.adc_data[6]);
 }
 
-static void updateBuiltinNeoPixel()
+static void updateBuiltinNeoPixel(unsigned long timeMs)
 {
   static uint8_t pixelColor[3];
   int sensorValue = outgoingMsg.adc_data[0];
@@ -206,10 +220,22 @@ static void updateBuiltinNeoPixel()
   builtInNeo.show();
 }
 
-static void updateStrip()
+static void updateStrip(unsigned long timeMs)
 {
   static uint16_t counter = 0;
-  strip.setPixelColor(0, strip.gamma32(strip.ColorHSV(counter++, 255, 55)));
+  uint32_t color = strip.gamma32(strip.ColorHSV(counter++, 255, 55));
+  strip.setPixelColor(0, color);
+  strip.setPixelColor(1, color);
+  strip.setPixelColor(2, color);
+  strip.setPixelColor(3, color);
+  strip.setPixelColor(4, color);
+  strip.setPixelColor(5, color);
+  strip.setPixelColor(6, color);
+  strip.setPixelColor(7, color);
+  strip.setPixelColor(8, color);
+  strip.setPixelColor(9, color);
+  strip.setPixelColor(10, color);
+  strip.setPixelColor(11, color);
   strip.show();
 }
 
@@ -224,8 +250,51 @@ static void mqtt_callback(char* topic, byte* payload, unsigned int length)
   Serial.println();
 }
 
+static void gpio_loop(unsigned long timeMs)
+{
+  static int prvButtonState = false;
+  int buttonState = digitalRead(BTN_PIN);
+  if(prvButtonState != buttonState) {
+    Serial.print("Btn: "); Serial.println(buttonState);
+    prvButtonState = buttonState;
+  }
+}
 
+#define D (2 * 1000000)
+static void publishMessage(unsigned long timeMs) {
+  static unsigned long lastMsg = 0;
+  static char msg[50];
 
+  //unsigned long now = micros();
+  if ((timeMs - lastMsg) > 2000L) {
+      snprintf (msg, 50, "timeMs: %ld lastMsg: %ld e: %ld", timeMs, lastMsg, timeMs - lastMsg);
+      Serial.println(msg);
+      lastMsg = timeMs;
+      return;
+      lastMsg = timeMs;
+      Serial.println(F("Publish message: "));
+      send(&outgoingMsg);
+  }
+}
+
+/* Temp function */
+static void drawOnDisplay() {
+  Serial.println(F("Draw QR..."));
+  display_draw_imme("https://www.capitalone.com");
+  // Draw a small black and white QR code
+  // Parameters:
+  //   text: content to encode
+  //   x: horizontal position (upper left corner)
+  //   y: vertical position (upper left corner)
+  //if(!qrcode.draw("https://www.capitalone.com", 15, 15)) {
+    // Error generating QR code!
+    // Possible causes:
+    // - Text too long for selected version
+    // - Not enough memory
+  //  Serial.println(F("Failed to generate QR code!"));
+  //}
+  //display.display();
+}
 
 void setup() {
   Serial.begin(SERIAL_BAUD_RATE);
@@ -233,32 +302,28 @@ void setup() {
 
   adc_setup();
   gpio_setup();
+  neopixels_setup();
   display_setup();
   ethernet_setup();
   mqtt_setup((mqtt_conf_t){
-    .id = "arduinoClient42",
-    .sub_topic = "inTopic",
-    .pub_topic = "outTopic",
+    .id = "roo-client-42",
+    .sub_topic = "command",
+    .pub_topic = "sensors",
     .domain = "broker.mqtt-dashboard.com",
     .port = 1883,
     .callback = mqtt_callback,
     .ethClient = &ethClient
   });
 
-  neopixels_setup();
 }
 
 void loop() {
-  readAnalogSensores();
-  updateBuiltinNeoPixel();
-  updateStrip();
-
-  int buttonState = digitalRead(BTN_PIN);
-  if(prvButtonState != buttonState) {
-    Serial.print("Btn: "); Serial.println(buttonState);
-    prvButtonState = buttonState;
-  }
-
-  display_loop();
-  mqtt_loop();
+  readAnalogSensores(millis());
+  updateBuiltinNeoPixel(millis());
+  updateStrip(millis());
+  gpio_loop(millis());
+  display_loop(millis());
+  mqtt_loop(millis());
+  ethernet_loop(millis());
+  publishMessage(millis());
 }

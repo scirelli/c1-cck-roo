@@ -16,21 +16,6 @@ void display_setup()
   qrcode.getGenerator()
       .setErrorCorrectionLevel(QRCodeECCLevel::High)
       .setVersion(5);
-
-  Serial.println(F("Draw QR..."));
-  // Draw a small black and white QR code
-  // Parameters:
-  //   text: content to encode
-  //   x: horizontal position (upper left corner)
-  //   y: vertical position (upper left corner)
-  if(!qrcode.draw("https://www.capitalone.com", 15, 15)) {
-    // Error generating QR code!
-    // Possible causes:
-    // - Text too long for selected version
-    // - Not enough memory
-    Serial.println(F("Failed to generate QR code!"));
-  }
-  display.display();
 }
 
 bool display_draw_imme(const char *text)
@@ -43,6 +28,6 @@ bool display_draw_imme(const char *text)
   return true;
 }
 
-void display_loop()
+void display_loop(long timeMs)
 {
 }

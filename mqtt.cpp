@@ -15,10 +15,12 @@ static mqtt_conf_t mqtt_config;
 
 static bool reconnect()
 {
+    static char msg[50];
     if (client.connect(mqtt_config.id)) {
         Serial.println("connected");
         // Once connected, publish an announcement...
-        client.publish(mqtt_config.pub_topic, "hello world");
+        snprintf (msg, 50, "Client %s connected", mqtt_config.id);
+        client.publish(mqtt_config.pub_topic, msg);
         // ... and resubscribe
         client.subscribe(mqtt_config.sub_topic);
     } else {
@@ -41,7 +43,7 @@ bool mqtt_setup(mqtt_conf_t config)
     return true;
 }
 
-void mqtt_loop()
+void mqtt_loop(long timeMs)
 {
     if (!client.connected()) {
         long now = millis();
@@ -55,15 +57,6 @@ void mqtt_loop()
         client.loop();
     }
 
-    // long now = millis();
-    // if (now - lastMsg > 2000) {
-    //     lastMsg = now;
-    //     ++value;
-    //     snprintf (msg, 50, "hello world #%ld", value);
-    //     Serial.print(F("Publish message: "));
-    //     Serial.println(msg);
-    //     client.publish(config.pub_topic, msg);
-    // }
 }
 
 bool send(const outgoingMsg_t *payload) {
