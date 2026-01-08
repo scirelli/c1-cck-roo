@@ -25,7 +25,7 @@ static bool reconnect()
         client.subscribe(mqtt_config.sub_topic);
     } else {
       Serial.print("failed, rc=");
-      Serial.print(client.state());
+      Serial.println(client.state());
     }
 
     return client.connected();

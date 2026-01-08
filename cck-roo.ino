@@ -6,7 +6,9 @@
 #include "message.h"
 
 #define MICRO_SEC_SEC 1000000
-#define TWO_SEC (2 * MICRO_SEC_SEC)
+#define US_MILLI      1000
+#define NEOPIXEL_DELAY (100 * US_MILLI)
+#define PUBLISH_RATE (5 * MICRO_SEC_SEC)
 
 #define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 #define SERIAL_BAUD_RATE 115200
@@ -42,8 +44,16 @@
 #define ALL_ADC_PINS {(IR_1_PIN), (IR_2_PIN), (IR_3_PIN), (IR_4_PIN), (IR_5_PIN), (IR_6_PIN), (AMBIENT_LIGHT_SENSE_PIN),(MOTOR_OVERCURRENT_SENSE_PIN),(SYSTEM_12V_OVERCURRENT_SENSE_PIN)}
 #define ADC_COUNT 4
 
+#define BTN_PIN                   (A4)
+#define LIMIT_SWITCH_FRONT_PIN    (BTN_PIN)
+#define LIMIT_SWITCH_REAR_PIN     (BTN_PIN)
+#define DOOR_SWITCH_OPEN_PIN      (BTN_PIN)
+#define DOOR_SWITCH_CLOSE_PIN     (BTN_PIN)
+#define PIXEL_POWER_GOOD_PIN      (BTN_PIN)
+#define LCD_POWER_GOOD_PIN        (BTN_PIN)
+#define SYSTEM_5V_POWER_GOOD_PIN  (BTN_PIN)
+
 #define BUILT_IN_PIXEL_PIN      8
-#define BTN_PIN                 (A4)
 #define NEO_STRIP_PIN           (A5)
 #define VBAT_PIN                (A6)  // Pin for reading battery voltage
 //=================
@@ -70,10 +80,13 @@ static void adc_setup();
 
 static void mqtt_callback(char* topic, byte* payload, unsigned int length);
 static void ethernet_loop(time__t elapsedTimeUs);
-static void readAnalogSensores(time__t elapsedTimeUs);
+static void sensor_loop(time__t elapsedTimeUs);
+static void read_analog_sensors(time__t elapsedTimeUs);
+static void read_gpio(time__t elapsedTimeUs);
 static void updateBuiltinNeoPixel(time__t elapsedTimeUs);
 static void updateStrip(time__t elapsedTimeUs);
 static void print_WIZnet_chip_id(EthernetHardwareStatus id);
+static void print_message(outgoingMsg_t msg);
 
 static void print_WIZnet_chip_id(EthernetHardwareStatus id)
 {
@@ -93,6 +106,15 @@ static void print_WIZnet_chip_id(EthernetHardwareStatus id)
         default:
             Serial.println("Unknown");
     }
+}
+
+static void print_message(outgoingMsg_t msg) {
+    Serial.print("crc: ");Serial.print(msg.crc);
+    Serial.print(" adc0: ");Serial.print(msg.adc_data[0]);
+    Serial.print(" adc1: ");Serial.print(msg.adc_data[1]);
+    Serial.print(" adc2: ");Serial.print(msg.adc_data[2]);
+    Serial.print(" amb: ");Serial.print(msg.adc_data[6]);
+    Serial.print(" gpio: ");Serial.println(msg.gpio);
 }
 
 static void adc_setup()
@@ -172,14 +194,7 @@ static bool ethernet_setup()
 
 
 
-static void ethernet_loop(time__t elapsedTimeUs)
-{
-  if(elapsedTimeUs >= 1000) {
-    Ethernet.maintain();
-  }
-}
-
-static void readAnalogSensores(time__t elapsedTimeUs)
+static void read_analog_sensors(time__t elapsedTimeUs)
 {
   outgoingMsg.adc_data[0] = (uint8_t)analogRead(IR_1_PIN);
   outgoingMsg.adc_data[1] = (uint8_t)analogRead(IR_2_PIN);
@@ -187,40 +202,89 @@ static void readAnalogSensores(time__t elapsedTimeUs)
   outgoingMsg.adc_data[6] = (uint8_t)analogRead(AMBIENT_LIGHT_SENSE_PIN);
 }
 
+static void read_gpio(time__t elapsedTimeUs)
+{
+  static int prvButtonState = false;
+  int buttonState = digitalRead(DOOR_SWITCH_OPEN_PIN);
+
+  if(prvButtonState != buttonState) {
+    Serial.print("Btn: "); Serial.println(buttonState);
+    prvButtonState = buttonState;
+  }
+
+   outgoingMsg.gpio = (
+      (digitalRead(LIMIT_SWITCH_FRONT_PIN)   << LIMIT_SWITCH_FRONT_BIT) |
+      (digitalRead(LIMIT_SWITCH_REAR_PIN)    << LIMIT_SWITCH_REAR_BIT) |
+      (digitalRead(DOOR_SWITCH_OPEN_PIN)     << DOOR_SWITCH_OPEN_BIT) |
+      (digitalRead(DOOR_SWITCH_CLOSE_PIN)    << DOOR_SWITCH_CLOSE_BIT) |
+      (digitalRead(PIXEL_POWER_GOOD_PIN)     << PIXEL_POWER_GOOD_BIT) |
+      (digitalRead(LCD_POWER_GOOD_PIN)       << LCD_POWER_GOOD_BIT) |
+      (digitalRead(SYSTEM_5V_POWER_GOOD_PIN) << SYSTEM_5V_POWER_GOOD_BIT)
+   );
+}
+
+static void sensor_loop(time__t elapsedTimeUs)
+{
+  read_analog_sensors(elapsedTimeUs);
+  read_gpio(elapsedTimeUs);
+}
+
+static void ethernet_loop(time__t elapsedTimeUs)
+{
+  if(elapsedTimeUs >= 1000) {
+    Ethernet.maintain();
+  }
+}
+
 static void updateBuiltinNeoPixel(time__t elapsedTimeUs)
 {
   static uint8_t r,g,b;
-  if(r != outgoingMsg.adc_data[0] || g != outgoingMsg.adc_data[1] || b != outgoingMsg.adc_data[2]) {
-    builtInNeo.setPixelColor(0, builtInNeo.gamma32(builtInNeo.Color(
-      outgoingMsg.adc_data[0],
-      outgoingMsg.adc_data[1],
-      outgoingMsg.adc_data[2]
-    )));
-    builtInNeo.show();
-    r = outgoingMsg.adc_data[0];
-    g = outgoingMsg.adc_data[1];
-    b = outgoingMsg.adc_data[2];
-    delay(10);//required delay, if show happens to frequiently micros and millis break?
+  static time__t t;
+  t += elapsedTimeUs;
+
+  //required delay, if show() disables interrupts, which messes up timing.
+  if(t > NEOPIXEL_DELAY) {
+    t=0;
+    if(r != outgoingMsg.adc_data[0] || g != outgoingMsg.adc_data[1] || b != outgoingMsg.adc_data[2]) {
+      builtInNeo.setPixelColor(0, builtInNeo.gamma32(builtInNeo.Color(
+        outgoingMsg.adc_data[0],
+        outgoingMsg.adc_data[1],
+        outgoingMsg.adc_data[2],
+        0
+      )));
+      builtInNeo.show();
+      r = outgoingMsg.adc_data[0];
+      g = outgoingMsg.adc_data[1];
+      b = outgoingMsg.adc_data[2];
+    }
   }
 }
 
 static void updateStrip(time__t elapsedTimeUs)
 {
   static uint16_t counter = 0;
-  uint32_t color = strip.gamma32(strip.ColorHSV(counter++, 255, 55));
-  strip.setPixelColor(0, color);
-  strip.setPixelColor(1, color);
-  strip.setPixelColor(2, color);
-  strip.setPixelColor(3, color);
-  strip.setPixelColor(4, color);
-  strip.setPixelColor(5, color);
-  strip.setPixelColor(6, color);
-  strip.setPixelColor(7, color);
-  strip.setPixelColor(8, color);
-  strip.setPixelColor(9, color);
-  strip.setPixelColor(10, color);
-  strip.setPixelColor(11, color);
-  strip.show();
+  static time__t t;
+  t += elapsedTimeUs;
+
+  //required delay, if show() disables interrupts, which messes up timing.
+  if(t > NEOPIXEL_DELAY) {
+    t=0;
+    counter += 100;
+    uint32_t color = strip.gamma32(strip.ColorHSV(counter, 255, 55));
+    strip.setPixelColor(0, color);
+    strip.setPixelColor(1, color);
+    strip.setPixelColor(2, color);
+    strip.setPixelColor(3, color);
+    strip.setPixelColor(4, color);
+    strip.setPixelColor(5, color);
+    strip.setPixelColor(6, color);
+    strip.setPixelColor(7, color);
+    strip.setPixelColor(8, color);
+    strip.setPixelColor(9, color);
+    strip.setPixelColor(10, color);
+    strip.setPixelColor(11, color);
+    strip.show();
+  }
 }
 
 static void mqtt_callback(char* topic, byte* payload, unsigned int length)
@@ -234,23 +298,14 @@ static void mqtt_callback(char* topic, byte* payload, unsigned int length)
   Serial.println();
 }
 
-static void gpio_loop(time__t elapsedTimeUs)
-{
-  static int prvButtonState = false;
-  int buttonState = digitalRead(BTN_PIN);
-  if(prvButtonState != buttonState) {
-    Serial.print("Btn: "); Serial.println(buttonState);
-    prvButtonState = buttonState;
-  }
-}
-
 static void publishMessage(time__t elapsedTimeUs) {
   static time__t t = 0;
-  static char msg[50];
   t += elapsedTimeUs;
-  if (t > TWO_SEC) {
+  if (t > PUBLISH_RATE) {
       t=0;
-      Serial.print(F("Publishing message"));Serial.println(elapsedTimeUs);
+      //msg_insertCRC(&outgoingMsg); this is not needed when using mqtt
+      Serial.print("Publishing message: ");
+      print_message(outgoingMsg);
       send(&outgoingMsg);
   }
 }
@@ -259,19 +314,6 @@ static void publishMessage(time__t elapsedTimeUs) {
 static void drawOnDisplay() {
   Serial.println(F("Draw QR..."));
   display_draw_imme("https://www.capitalone.com");
-  // Draw a small black and white QR code
-  // Parameters:
-  //   text: content to encode
-  //   x: horizontal position (upper left corner)
-  //   y: vertical position (upper left corner)
-  //if(!qrcode.draw("https://www.capitalone.com", 15, 15)) {
-    // Error generating QR code!
-    // Possible causes:
-    // - Text too long for selected version
-    // - Not enough memory
-  //  Serial.println(F("Failed to generate QR code!"));
-  //}
-  //display.display();
 }
 
 void setup() {
@@ -301,12 +343,10 @@ void loop() {
   time__t curTime = micros();
   time__t elapsed = curTime - prevTime;
   prevTime = curTime;
-  publishMessage(elapsed);
-  readAnalogSensores(elapsed);
-  gpio_loop(elapsed);
+  sensor_loop(elapsed);
   updateBuiltinNeoPixel(elapsed);
   updateStrip(elapsed);
-  display_loop(elapsed);
+  publishMessage(elapsed);
   mqtt_loop(elapsed);
   ethernet_loop(elapsed);
 }
