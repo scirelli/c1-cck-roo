@@ -1,0 +1,27 @@
+{
+  "name": "mqtt_node",
+  "version": "1.0.0",
+  "description": "Example node mqtt client and server in node",
+  "keywords": [
+    "mqtt",
+    "node"
+  ],
+  "homepage": "https://github.com/scirelli/tri-color-eInk#readme",
+  "bugs": {
+    "url": "https://github.com/scirelli/tri-color-eInk/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scirelli/tri-color-eInk.git"
+  },
+  "license": "ISC",
+  "author": "Steve Cirelli",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "mqtt": "^5.14.1"
+  }
+}
