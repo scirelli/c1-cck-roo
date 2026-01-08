@@ -6,6 +6,13 @@ static QRCodeGFX qrcode(display);
 
 void display_setup()
 {
+  pinMode(EPD_CS_PIN, OUTPUT);
+  digitalWrite(EPD_CS_PIN, HIGH);
+  pinMode(SD_CS_PIN, OUTPUT);
+  digitalWrite(SD_CS_PIN, HIGH);
+  pinMode(SRAM_CS_PIN, OUTPUT);
+  digitalWrite(SRAM_CS_PIN, HIGH);
+
   Serial.println(F("Init display..."));
   display.begin(THINKINK_TRICOLOR);
   display.fillScreen(EPD_BLACK);

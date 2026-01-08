@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <Adafruit_GFX.h>         // Core graphics library
 #include <Adafruit_ThinkInk.h>
-#include <SdFat_Adafruit_Fork.h>  // SD card & FAT filesystem library
+#include <SdFat_Adafruit_Fork.h>  // SD card & FAT filesystem library. *** THIS LIBRARY HAS A BUG *** it messes up timers
 #include <Adafruit_SPIFlash.h>    // SPI / QSPI flash library
 #include <Adafruit_ImageReader_EPD.h> // Image-reading functions
 #include <QRCodeGFX.h>

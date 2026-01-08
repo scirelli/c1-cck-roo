@@ -5,6 +5,9 @@
 #include "mqtt.h"
 #include "message.h"
 
+#define MICRO_SEC_SEC 1000000
+#define TWO_SEC (2 * MICRO_SEC_SEC)
+
 #define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 #define SERIAL_BAUD_RATE 115200
 
@@ -43,8 +46,9 @@
 #define BTN_PIN                 (A4)
 #define NEO_STRIP_PIN           (A5)
 #define VBAT_PIN                (A6)  // Pin for reading battery voltage
-
 //=================
+
+typedef unsigned long time__t;
 
 static Adafruit_NeoPixel builtInNeo(1, BUILT_IN_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 static Adafruit_NeoPixel strip(NUMPIXELS, NEO_STRIP_PIN, NEO_GRBW + NEO_KHZ800);
@@ -65,10 +69,10 @@ static bool ethernet_setup_static_ip();
 static void adc_setup();
 
 static void mqtt_callback(char* topic, byte* payload, unsigned int length);
-static void ethernet_loop(unsigned long timeMs);
-static void readAnalogSensores(unsigned long timeMs);
-static void updateBuiltinNeoPixel(unsigned long timeMs);
-static void updateStrip(unsigned long timeMs);
+static void ethernet_loop(time__t elapsedTimeUs);
+static void readAnalogSensores(time__t elapsedTimeUs);
+static void updateBuiltinNeoPixel(time__t elapsedTimeUs);
+static void updateStrip(time__t elapsedTimeUs);
 static void print_WIZnet_chip_id(EthernetHardwareStatus id);
 
 static void print_WIZnet_chip_id(EthernetHardwareStatus id)
@@ -103,12 +107,6 @@ static void gpio_setup()
   //Make sure all CS pins are high to start, let the drivers pull them down when they want to communicate.
   pinMode(ETH_CS_PIN, OUTPUT);
   digitalWrite(ETH_CS_PIN, HIGH);
-  pinMode(EPD_CS_PIN, OUTPUT);
-  digitalWrite(EPD_CS_PIN, HIGH);
-  pinMode(SD_CS_PIN, OUTPUT);
-  digitalWrite(SD_CS_PIN, HIGH);
-  pinMode(SRAM_CS_PIN, OUTPUT);
-  digitalWrite(SRAM_CS_PIN, HIGH);
 
   pinMode(BTN_PIN, INPUT_PULLDOWN);
 }
@@ -127,7 +125,6 @@ static void neopixels_setup()
   strip.setPixelColor(4, strip.Color(0,0,0,5));
   strip.show();
 }
-
 
 static bool ethernet_setup_dhcp()
 {
@@ -175,50 +172,39 @@ static bool ethernet_setup()
 
 
 
-static void ethernet_loop(unsigned long timeMs)
+static void ethernet_loop(time__t elapsedTimeUs)
 {
-  static long prevTime = 0;
-
-  if((timeMs - prevTime) >= 1000) {
+  if(elapsedTimeUs >= 1000) {
     Ethernet.maintain();
   }
 }
 
-static void readAnalogSensores(unsigned long timeMs)
+static void readAnalogSensores(time__t elapsedTimeUs)
 {
-  outgoingMsg.adc_data[0] = analogRead(IR_1_PIN);
-  outgoingMsg.adc_data[1] = analogRead(IR_2_PIN);
-  outgoingMsg.adc_data[2] = analogRead(IR_3_PIN);
-  outgoingMsg.adc_data[6] = analogRead(AMBIENT_LIGHT_SENSE_PIN);
-  //Serial.print(outgoingMsg.adc_data[0]); Serial.print(", ");
-  //Serial.print(outgoingMsg.adc_data[1]); Serial.print(", ");
-  //Serial.print(outgoingMsg.adc_data[2]); Serial.print(", ");
-  //Serial.println(outgoingMsg.adc_data[6]);
+  outgoingMsg.adc_data[0] = (uint8_t)analogRead(IR_1_PIN);
+  outgoingMsg.adc_data[1] = (uint8_t)analogRead(IR_2_PIN);
+  outgoingMsg.adc_data[2] = (uint8_t)analogRead(IR_3_PIN);
+  outgoingMsg.adc_data[6] = (uint8_t)analogRead(AMBIENT_LIGHT_SENSE_PIN);
 }
 
-static void updateBuiltinNeoPixel(unsigned long timeMs)
+static void updateBuiltinNeoPixel(time__t elapsedTimeUs)
 {
-  static uint8_t pixelColor[3];
-  int sensorValue = outgoingMsg.adc_data[0];
-  pixelColor[0] = (uint8_t)(255 * (sensorValue/ANALOG_MAX));
-  float voltage = sensorValue * (ANALOG_V / ANALOG_MAX);  // Convert the analog reading (which goes from 0 - 1023) to a voltage (0 - 3.3V):
-  //Serial.print("R1 (V): ");Serial.print(voltage);Serial.print("\t");Serial.println(sensorValue);
-
-  sensorValue = outgoingMsg.adc_data[1];
-  voltage = sensorValue * (ANALOG_V / ANALOG_MAX);
-  pixelColor[1] = (uint8_t)(255 * (sensorValue/ANALOG_MAX));
-  //Serial.print("R2 (V): ");Serial.print(voltage);Serial.print("\t");Serial.println(sensorValue);
-
-  sensorValue = outgoingMsg.adc_data[2];
-  voltage = sensorValue * (ANALOG_V / ANALOG_MAX);
-  pixelColor[2] = (uint8_t)(255 * (sensorValue/ANALOG_MAX));
-  //Serial.print("R3 (V): ");Serial.print(voltage);Serial.print("\t");Serial.println(sensorValue);
-  //builtInNeo.setPixelColor(0, builtInNeo.gamma32(builtInNeo.ColorHSV(counter++, 255, 55))); //builtInNeo.Color(r,g,b);
-  builtInNeo.setPixelColor(0, builtInNeo.gamma32(builtInNeo.Color(pixelColor[0], pixelColor[1], pixelColor[2])));
-  builtInNeo.show();
+  static uint8_t r,g,b;
+  if(r != outgoingMsg.adc_data[0] || g != outgoingMsg.adc_data[1] || b != outgoingMsg.adc_data[2]) {
+    builtInNeo.setPixelColor(0, builtInNeo.gamma32(builtInNeo.Color(
+      outgoingMsg.adc_data[0],
+      outgoingMsg.adc_data[1],
+      outgoingMsg.adc_data[2]
+    )));
+    builtInNeo.show();
+    r = outgoingMsg.adc_data[0];
+    g = outgoingMsg.adc_data[1];
+    b = outgoingMsg.adc_data[2];
+    delay(10);//required delay, if show happens to frequiently micros and millis break?
+  }
 }
 
-static void updateStrip(unsigned long timeMs)
+static void updateStrip(time__t elapsedTimeUs)
 {
   static uint16_t counter = 0;
   uint32_t color = strip.gamma32(strip.ColorHSV(counter++, 255, 55));
@@ -248,7 +234,7 @@ static void mqtt_callback(char* topic, byte* payload, unsigned int length)
   Serial.println();
 }
 
-static void gpio_loop(unsigned long timeMs)
+static void gpio_loop(time__t elapsedTimeUs)
 {
   static int prvButtonState = false;
   int buttonState = digitalRead(BTN_PIN);
@@ -258,19 +244,13 @@ static void gpio_loop(unsigned long timeMs)
   }
 }
 
-#define D (2 * 1000000)
-static void publishMessage(unsigned long timeMs) {
-  static unsigned long lastMsg = 0;
+static void publishMessage(time__t elapsedTimeUs) {
+  static time__t t = 0;
   static char msg[50];
-
-  //unsigned long now = micros();
-  if ((timeMs - lastMsg) > 2000L) {
-      snprintf (msg, 50, "timeMs: %ld lastMsg: %ld e: %ld", timeMs, lastMsg, timeMs - lastMsg);
-      Serial.println(msg);
-      lastMsg = timeMs;
-      return;
-      lastMsg = timeMs;
-      Serial.println(F("Publish message: "));
+  t += elapsedTimeUs;
+  if (t > TWO_SEC) {
+      t=0;
+      Serial.print(F("Publishing message"));Serial.println(elapsedTimeUs);
       send(&outgoingMsg);
   }
 }
@@ -306,22 +286,27 @@ void setup() {
   mqtt_setup((mqtt_conf_t){
     .id = "roo-client-42",
     .sub_topic = "command",
-    .pub_topic = "sensors",
-    .domain = "broker.mqtt-dashboard.com",
+    .pub_topic = "roo-sensors",
+    //.domain = "broker.mqtt-dashboard.com",
+    .domain = "test.mosquitto.org",
     .port = 1883,
     .callback = mqtt_callback,
     .ethClient = &ethClient
   });
-
 }
 
 void loop() {
-  readAnalogSensores(millis());
-  updateBuiltinNeoPixel(millis());
-  updateStrip(millis());
-  gpio_loop(millis());
-  display_loop(millis());
-  mqtt_loop(millis());
-  ethernet_loop(millis());
-  publishMessage(millis());
+  static time__t prevTime = 0;
+
+  time__t curTime = micros();
+  time__t elapsed = curTime - prevTime;
+  prevTime = curTime;
+  publishMessage(elapsed);
+  readAnalogSensores(elapsed);
+  gpio_loop(elapsed);
+  updateBuiltinNeoPixel(elapsed);
+  updateStrip(elapsed);
+  display_loop(elapsed);
+  mqtt_loop(elapsed);
+  ethernet_loop(elapsed);
 }
