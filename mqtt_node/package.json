@@ -1,14 +1,14 @@
 {
   "name": "mqtt_node",
   "version": "1.0.0",
-  "description": "Example node mqtt client and server in node",
+  "description": "Testing for mqtt",
   "keywords": [
     "mqtt",
     "node"
   ],
-  "homepage": "https://github.com/scirelli/tri-color-eInk#readme",
+  "homepage": "https://github.com/scirelli/c1-cck-roo#readme",
   "bugs": {
-    "url": "https://github.com/scirelli/tri-color-eInk/issues"
+    "url": "https://github.com/scirelli/c1-cck-roo/issues"
   },
   "repository": {
     "type": "git",

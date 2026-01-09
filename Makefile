@@ -270,5 +270,31 @@ else ifeq ($(OS),Linux)
 endif
 # =============================================================================
 
+# =============================================================================
+# Mosquitto
+# =============================================================================
+.mosquitto:
+	@$(CNT_MNGR) build -t org.cirelli.containers/mosquitto -f MosquittoContainer .
+	@touch .mosquitto
 
-.PHONY: all clean size upload monitor send term build-CubePrgr run-arduinoide copy-stm32cube install-CubePrgr build-CubePrgr
+build-mosquitto: .mosquitto
+
+clean-mosquitto:
+	@podman rmi org.cirelli.containers/mosquitto:latest
+	@rm -f .mosquitto
+
+run-mosquitto: .mosquitto
+	@$(CNT_MNGR) run \
+		--rm \
+		--name mosquitto \
+		--publish 1883:1883 \
+		--publish 8883:8883 \
+		--publish 9001:9001 \
+		org.cirelli.containers/mosquitto:latest
+#-v ./mosquitto.conf:/etc/mosquitto/conf.d/mosquitto.conf
+#-v ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+# =============================================================================
+
+
+
+.PHONY: all clean size upload monitor send term build-CubePrgr run-arduinoide copy-stm32cube install-CubePrgr build-CubePrgr build-Mosquitto clean-mosquitto run-mosquitto
