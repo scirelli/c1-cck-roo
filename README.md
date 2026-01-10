@@ -5,6 +5,7 @@
     * Add a command to display the C1 logo
   * Add roo-qr-display topic
   * Add roo-message-display topic
+  * 129-163; Add a way to varry the publish freq through turning a knob.
 
 
 ## Libraries

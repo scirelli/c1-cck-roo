@@ -28,6 +28,7 @@
 //#define BOOT_EN_PIN       (B0)  // Used to enable flashing
 //#define BAT_PIN           (BAT) // Tied to positive battery  terminal
 //#define USB_PIN           (USB) // Tied to 5v of the USB C
+#define VBAT_PIN            (A6)  // Pin for reading battery voltage
 
 #define ETH_CS_PIN          10
 
@@ -39,7 +40,7 @@
 #define IR_6_PIN                          0
 #define AMBIENT_LIGHT_SENSE_PIN           (A3)
 #define MOTOR_OVERCURRENT_SENSE_PIN       0
-#define SYSTEM_12V_OVERCURRENT_SENSE_PIN  0
+#define SYSTEM_12V_OVERCURRENT_SENSE_PIN  (VBAT_PIN)
 #define IR_PIN_LIST  {(IR_1_PIN), (IR_2_PIN), (IR_3_PIN)}
 #define ALL_ADC_PINS {(IR_1_PIN), (IR_2_PIN), (IR_3_PIN), (IR_4_PIN), (IR_5_PIN), (IR_6_PIN), (AMBIENT_LIGHT_SENSE_PIN),(MOTOR_OVERCURRENT_SENSE_PIN),(SYSTEM_12V_OVERCURRENT_SENSE_PIN)}
 #define ADC_COUNT 4
@@ -55,7 +56,6 @@
 
 #define BUILT_IN_PIXEL_PIN      8
 #define NEO_STRIP_PIN           (A5)
-#define VBAT_PIN                (A6)  // Pin for reading battery voltage
 //=================
 
 typedef unsigned long time__t;
@@ -114,6 +114,7 @@ static void print_message(outgoingMsg_t msg) {
     Serial.print(" adc1: ");Serial.print(msg.adc_data[1]);
     Serial.print(" adc2: ");Serial.print(msg.adc_data[2]);
     Serial.print(" amb: ");Serial.print(msg.adc_data[6]);
+    Serial.print(" sys12v: ");Serial.print(msg.adc_data[8]);
     Serial.print(" gpio: ");Serial.println(msg.gpio);
 }
 
@@ -200,6 +201,7 @@ static void read_analog_sensors(time__t elapsedTimeUs)
   outgoingMsg.adc_data[1] = (uint8_t)analogRead(IR_2_PIN);
   outgoingMsg.adc_data[2] = (uint8_t)analogRead(IR_3_PIN);
   outgoingMsg.adc_data[6] = (uint8_t)analogRead(AMBIENT_LIGHT_SENSE_PIN);
+  outgoingMsg.adc_data[8] = (uint8_t)analogRead(SYSTEM_12V_OVERCURRENT_SENSE_PIN);
 }
 
 static void read_gpio(time__t elapsedTimeUs)
