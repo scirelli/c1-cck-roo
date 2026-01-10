@@ -9,6 +9,12 @@
 #define US_MILLI      1000
 #define NEOPIXEL_DELAY (100 * US_MILLI)
 #define PUBLISH_RATE (5 * MICRO_SEC_SEC)
+#define BAT_V_MIN 0.f
+#define BAT_V_MAX 165.f
+#define MIN_SEND_RATE_HZ 1.f
+#define MAX_SEND_RATE_HZ 15.f
+#define SEND_RATE_HZ(x) ((((x/BAT_V_MAX) * ((MAX_SEND_RATE_HZ+1) - MIN_SEND_RATE_HZ)) + MIN_SEND_RATE_HZ))
+#define SEND_RATE_US(x) ((int)((MICRO_SEC_SEC)/(SEND_RATE_HZ(x))))
 
 #define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 #define SERIAL_BAUD_RATE 115200
@@ -26,8 +32,8 @@
 
 //==== Pin out ====
 //#define BOOT_EN_PIN       (B0)  // Used to enable flashing
-//#define BAT_PIN           (BAT) // Tied to positive battery  terminal
-//#define USB_PIN           (USB) // Tied to 5v of the USB C
+//#define BAT_PIN           (BAT) // Tied to positive battery terminal. Not defined but there is one.
+//#define USB_PIN           (USB) // Tied to 5v of the USB C. Not defined but there is one.
 #define VBAT_PIN            (A6)  // Pin for reading battery voltage
 
 #define ETH_CS_PIN          10
@@ -303,10 +309,15 @@ static void mqtt_callback(char* topic, byte* payload, unsigned int length)
 static void publishMessage(time__t elapsedTimeUs) {
   static time__t t = 0;
   t += elapsedTimeUs;
-  if (t > PUBLISH_RATE) {
+  if (t > SEND_RATE_US(outgoingMsg.adc_data[8])) {
       t=0;
       //msg_insertCRC(&outgoingMsg); this is not needed when using mqtt
-      Serial.print("Publishing message: ");
+      Serial.print("Publishing message (");
+      Serial.print(SEND_RATE_HZ(outgoingMsg.adc_data[8]));
+      //Serial.print(" Hz): ");
+      Serial.print("Hz ");
+      Serial.print(SEND_RATE_US(outgoingMsg.adc_data[8]));
+      Serial.print(" us): ");
       print_message(outgoingMsg);
       send(&outgoingMsg);
   }
