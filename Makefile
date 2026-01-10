@@ -26,7 +26,7 @@ BASE_USER_LIBS  = $(HOME)/Arduino/libraries
 endif
 
 SERIAL_PORT ?= /dev/ttyACM0
-BAUD_RATE ?= 9600
+BAUD_RATE ?= 115200
 
 # Toolchain Path
 TOOLCHAIN_PATH  = $(BASE_ARDUINO)/packages/STMicroelectronics/tools/xpack-arm-none-eabi-gcc/14.2.1-1.1/bin
