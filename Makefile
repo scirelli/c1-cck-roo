@@ -262,7 +262,7 @@ copy-stm32cube: build-CubePrgr
 build-CubePrgr: stm32cubeprg-lin.zip
 	$(CNT_MNGR) build --platform linux/amd64 -t org.cirelli.containers/stm32cubeprogrammer -f STM32Container .
 
-run-arduino: install-CubePrgr
+run-arduino: stm32cube
 ifeq ($(OS),Darwin)
 	open -a "Arduino IDE"
 else ifeq ($(OS),Linux)
